@@ -51,6 +51,21 @@ public class OrderBookReceiver(InvestApiClient client, IInstrumentRepo instrumen
         }, cancellationToken);
     }
 
+    public async Task SubscribeAsync(IEnumerable<Instrument> instrument, CancellationToken cancellationToken = default)
+    {
+        var req = new SubscribeOrderBookRequest()
+        {
+            SubscriptionAction = SubscriptionAction.Subscribe
+        };
+        req.Instruments.AddRange(instrument.Select(x=>new OrderBookInstrument()
+        {
+            InstrumentId = x.UId,
+            Depth = config.Value.OrderBookDepth,
+        }));
+        await _marketDataStream.RequestStream.WriteAsync(new MarketDataRequest()
+        { SubscribeOrderBookRequest = req }, cancellationToken);
+    }
+
     public async IAsyncEnumerable<OrderBook> ReceiveOrderBookAsync(CancellationToken cancellationToken = default)
     {
         await foreach (var orderBook in _marketDataStream

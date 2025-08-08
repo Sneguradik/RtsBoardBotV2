@@ -15,7 +15,7 @@ public class MarketDataWorker(IServiceProvider serviceProvider, IInstrumentRepo 
         {
             try
             {
-                foreach (var instrument in instrumentRepo.GetInstruments()) await marketDataService.SubscribeAsync(instrument, stoppingToken);
+                await marketDataService.SubscribeAsync(instrumentRepo.GetInstruments(), stoppingToken);
                 
                 logger.LogInformation("Successfully subscribed to orderbooks.");
                 logger.LogInformation("Starting orderbook processing...");
