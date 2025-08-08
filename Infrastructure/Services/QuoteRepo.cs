@@ -162,7 +162,7 @@ public class QuoteRepo( IDbConnection connection, IInstrumentRepo instrumentRepo
             SettlementCurrencyId = equity.CurrencyId,
             ExchangeRate = 0,
             Number = 2,
-            CreatedById = 1557,
+            CreatedById = 1562,
             State = "ACTIVE",
             ErrorCode = null,
             ErrorTextRus = null,
@@ -182,12 +182,12 @@ public class QuoteRepo( IDbConnection connection, IInstrumentRepo instrumentRepo
         var quote = new BoardQuote()
         {
             Id = UTI.New("QT").ToString(),
-            CreatedById = 1557,
+            CreatedById = 1562,
             CreationTime = DateTime.UtcNow,
             FrontTradeId = null,
             InstrumentId = equity.Id,
             IsDynamic = false,
-            PartyId = "TECH1",
+            PartyId = "AUTO_Q",
             QuoteRequestId = null,
             QuoteReplyId = null,
             LockOwnerId = null,
