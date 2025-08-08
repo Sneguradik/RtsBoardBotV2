@@ -14,7 +14,9 @@ public class PosterJob(IQuotesStorage quotesStorage, IQuoteRepo quoteRepo, IOrde
 
         var tickers = orderBookRepo.GetTickers();
         
-        logger.LogInformation($"Started processing {tickers.Count()} tickers.");
+        logger.LogInformation($"{DateTime.Now:dd-MM-yy hh:mm:ss} - Started processing {tickers.Count()} tickers.");
+
+        var processorCounter = 0;
 
         foreach (var ticker in tickers)
         {
@@ -48,10 +50,12 @@ public class PosterJob(IQuotesStorage quotesStorage, IQuoteRepo quoteRepo, IOrde
                 } );
             quotesToUpdate.AddRange(sellQuotes);
             quotesToUpdate.AddRange(buyQuotes);
+            
+            processorCounter++;
         }
         
         await quoteRepo.UpdateQuotesAsync(quotesToUpdate,context.CancellationToken);
         
-        logger.LogInformation($"Finished processing {quotes.Count()} quotes.");
+        logger.LogInformation($"{DateTime.Now:dd-MM-yy hh:mm:ss} - Processed {processorCounter} ticker.");
     }
 }
