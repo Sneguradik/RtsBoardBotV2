@@ -9,14 +9,14 @@ public class PosterJob(IQuotesStorage quotesStorage, IQuoteRepo quoteRepo, IOrde
 {
     public async Task Execute(IJobExecutionContext context)
     {
-        var quotes = quotesStorage.GetAllAsync();
-        var quotesToUpdate = new List<Quote>();
-
         var tickers = orderBookRepo.GetTickers();
         
         logger.LogInformation($"{DateTime.Now:dd-MM-yy hh:mm:ss} - Started processing {tickers.Count()} tickers.");
 
         var processorCounter = 0;
+
+        var quotesToUpdate = new List<Quote>();
+        var quotesToCreate = new List<Quote>();
 
         foreach (var ticker in tickers)
         {
@@ -28,33 +28,68 @@ public class PosterJob(IQuotesStorage quotesStorage, IQuoteRepo quoteRepo, IOrde
             }
             
             logger.LogInformation($"Processing {ticker}.");
-            
-            var quotesByInstrument = quotes.Where(x=>x.Instrument == book.Instrument);
-            
-            
-            var sellQuotes = Enumerable.Zip(book.Asks, quotesByInstrument.Where(x=>x.Direction == DealDirection.Sell),
-                (first, second) =>
-                {
 
-                    second.Price = first.Price;
-                    second.Quantity = first.Quantity;
-                    return second;
-                } );
-            
-            var buyQuotes = Enumerable.Zip(book.Bids, quotesByInstrument.Where(x=>x.Direction == DealDirection.Buy),
-                (first, second) =>
+
+
+            var sellExistingQuotes = quotesStorage.GetQuotesByTickerAndSide(ticker, DealDirection.Sell).ToList();
+
+            if (sellExistingQuotes.Any())
+            {
+                var sellQuotes = Enumerable.Zip(book.Asks, sellExistingQuotes,
+                                (first, second) =>
+                                {
+                
+                                    second.Price = first.Price;
+                                    second.Quantity = first.Quantity;
+                                    return second;
+                                } );
+                quotesToUpdate.AddRange(sellQuotes);
+            }
+            else
+            {
+                quotesToCreate.AddRange(book.Asks.Select(x=>new Quote()
                 {
-                    second.Price = first.Price;
-                    second.Quantity = first.Quantity;
-                    return second;
-                } );
-            quotesToUpdate.AddRange(sellQuotes);
-            quotesToUpdate.AddRange(buyQuotes);
+                    Instrument = book.Instrument,
+                    Price = x.Price,
+                    Quantity = x.Quantity,
+                    Direction = x.Direction,
+                    PriceCurrency = book.Instrument.Currency,
+                }));
+            }
+            
+            
+            
+            var buyExistingQuotes = quotesStorage.GetQuotesByTickerAndSide(ticker, DealDirection.Buy).ToList();
+
+            if (buyExistingQuotes.Any())
+            {
+                var buyQuotes = Enumerable.Zip(book.Bids, buyExistingQuotes,
+                                (first, second) =>
+                                {
+                                    second.Price = first.Price;
+                                    second.Quantity = first.Quantity;
+                                    return second;
+                                } );
+                quotesToUpdate.AddRange(buyQuotes);
+            }
+            else
+            {
+                quotesToCreate.AddRange(book.Bids.Select(x=>new Quote()
+                {
+                    Instrument = book.Instrument,
+                    Price = x.Price,
+                    Quantity = x.Quantity,
+                    Direction = x.Direction,
+                    PriceCurrency = book.Instrument.Currency,
+                }));
+            }
+            
             
             processorCounter++;
         }
         
         await quoteRepo.UpdateQuotesAsync(quotesToUpdate,context.CancellationToken);
+        quotesStorage.AddAsync(await quoteRepo.CreateQuotesAsync(quotesToCreate,context.CancellationToken));
         
         logger.LogInformation($"{DateTime.Now:dd-MM-yy hh:mm:ss} - Processed {processorCounter} ticker.");
     }

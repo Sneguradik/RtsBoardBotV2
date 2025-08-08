@@ -62,9 +62,9 @@ public class QuoteRepo( IDbConnection connection, IInstrumentRepo instrumentRepo
         throw new NotImplementedException();
     }
     
-    public async Task<IEnumerable<Quote>> CreateQuotesAsync(IEnumerable<string> tickers, CancellationToken cancellationToken = default)
+    public async Task<IEnumerable<Quote>> CreateQuotesAsync(IEnumerable<Quote> quotes, CancellationToken cancellationToken = default)
     {
-        var tickersArray = tickers.ToArray();
+        var tickersArray = quotes.Select(x=>x.Instrument.Ticker).ToArray();
         var inClause = string.Join(",", tickersArray.Select((_, i) => $"'{tickersArray[i]}'"));
         var sql = $"SELECT * FROM Equities WHERE Id IN ({inClause})";
 

@@ -20,13 +20,7 @@ public class QuotesManager(IServiceProvider serviceProvider, IQuotesStorage quot
         var quoteRepo = scope.ServiceProvider.GetRequiredService<IQuoteRepo>();
         
         logger.LogInformation("Started creating quotes.");
-
-        var quotes = await quoteRepo.CreateQuotesAsync(instruments.Select(x=>x.Ticker).ToList(), cancellationToken);
         
-        quotesStorage.AddAsync(quotes, cancellationToken);
-        
-        foreach (var q in quotes) Console.WriteLine(q.DocumentId);
-        logger.LogInformation($"Created {quotes.Count()} quotes.");
     }
 
     public async Task StopAsync(CancellationToken cancellationToken)
@@ -34,7 +28,7 @@ public class QuotesManager(IServiceProvider serviceProvider, IQuotesStorage quot
         using var scope = serviceProvider.CreateScope();
         var quoteRepo = scope.ServiceProvider.GetRequiredService<IQuoteRepo>();
 
-        var ids = quotesStorage.GetAllAsync().Select(x => x.DocumentId).ToArray();
+        var ids = quotesStorage.GetAll().Select(x => x.DocumentId).ToArray();
 
         await quoteRepo.DeleteQuoteAsync(ids, cancellationToken);
         
