@@ -4,6 +4,7 @@ using Domain.Entities;
 using Domain.Enums;
 using Domain.Interfaces;
 using Grpc.Core;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Tinkoff.InvestApi;
 using Tinkoff.InvestApi.V1;
@@ -12,7 +13,7 @@ using OrderBook = Domain.Entities.OrderBook;
 
 namespace Infrastructure.Services;
 
-public class OrderBookReceiver(InvestApiClient client, IInstrumentRepo instrumentRepo, IOptions<BotConfig> config) : IOrderBookReceiver
+public class OrderBookReceiver(InvestApiClient client, IInstrumentRepo instrumentRepo, IOptions<BotConfig> config, ILogger<OrderBookReceiver> logger) : IOrderBookReceiver
 {
     private readonly InstrumentsService.InstrumentsServiceClient _instrumentsServiceClient = client.Instruments;
     private readonly AsyncDuplexStreamingCall<MarketDataRequest,MarketDataResponse> _marketDataStream = client.
@@ -72,9 +73,18 @@ public class OrderBookReceiver(InvestApiClient client, IInstrumentRepo instrumen
                            .ResponseStream
                            .ReadAllAsync(cancellationToken: cancellationToken))
         {
+            if (orderBook.SubscribeOrderBookResponse is not null)
+            {
+                logger.LogInformation($"Subscribed for {string.Join(", ", orderBook.SubscribeOrderBookResponse.OrderBookSubscriptions.Select(x => 
+                {
+                    var inst = instrumentRepo.GetInstrumentByUid(x.InstrumentUid);
+                    return inst is null ? x.InstrumentUid : inst.Ticker;
+                }))}");
+            }
+            
             if (orderBook.Orderbook is null) continue;
             var instrument = instrumentRepo.GetInstrumentByUid(orderBook.Orderbook.InstrumentUid);
-    
+            
             if (instrument is null) continue;
             
 
