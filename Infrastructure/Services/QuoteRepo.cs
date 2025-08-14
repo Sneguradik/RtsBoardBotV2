@@ -68,19 +68,20 @@ public class QuoteRepo( IDbConnection connection, IInstrumentRepo instrumentRepo
         var inClause = string.Join(",", tickersArray.Select((_, i) => $"'{tickersArray[i]}'"));
         var sql = $"SELECT * FROM Equities WHERE Id IN ({inClause})";
 
+        if (!quotes.Any()) return [];
+
         var equities = await connection.QueryAsync<BoardEquity>(
             new CommandDefinition(sql, cancellationToken: cancellationToken)
         );
 
         var boardQuotes = new List<BoardQuote>();
-        foreach (var equity in equities)
+        foreach (var quote in quotes)
         {
-            for (int i = 0; i < conf.Value.OrderBookDepth; i++)
-            {
-                boardQuotes.Add(CreateEquityQuoteAsync(equity, DealDirection.Buy));
-                boardQuotes.Add(CreateEquityQuoteAsync(equity, DealDirection.Sell));
-            }
+            var equity = equities.FirstOrDefault(x=>x.Id == quote.Instrument.Ticker);
+            if (equity is null) continue;
+            boardQuotes.Add(CreateEquityQuoteAsync(quote, equity));
         }
+        
         
         var ids = await BulkInsertQuotesAsync(boardQuotes, cancellationToken);
         
@@ -122,7 +123,17 @@ public class QuoteRepo( IDbConnection connection, IInstrumentRepo instrumentRepo
             ");
         }
 
-        await connection.ExecuteAsync(new CommandDefinition(sb.ToString(), cancellationToken: ct));
+        try
+        {
+            await connection.ExecuteAsync(new CommandDefinition(sb.ToString(), cancellationToken: ct));
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(e);
+            Console.WriteLine(sb.ToString());
+        }
+
+        
     }
 
 
@@ -138,11 +149,11 @@ public class QuoteRepo( IDbConnection connection, IInstrumentRepo instrumentRepo
 
 
 
-    private BoardQuote CreateEquityQuoteAsync(BoardEquity equity, DealDirection direction)
+    private BoardQuote CreateEquityQuoteAsync(Quote quote ,BoardEquity equity)
     {
         var xml = new BoardXml()
         {
-            Body = GenerateXml(equity, direction)
+            Body = GenerateXml(equity, quote.Direction)
         };
         var revision = new BoardQuoteRevision()
         {
@@ -150,8 +161,8 @@ public class QuoteRepo( IDbConnection connection, IInstrumentRepo instrumentRepo
             Comment = $"Quote for {equity.Id}",
             ClientCode = "проверка123",
             IsIndicative = false,
-            Price = 1,
-            Quantity = 1,
+            Price = Convert.ToDecimal(quote.Price, CultureInfo.InvariantCulture),
+            Quantity = Convert.ToDecimal(quote.Quantity, CultureInfo.InvariantCulture),
             PriceCurrencyId = equity.CurrencyId,
             NominalCurrencyId = equity.CurrencyId,
             TimeToLive = 0,
@@ -168,7 +179,7 @@ public class QuoteRepo( IDbConnection connection, IInstrumentRepo instrumentRepo
             ErrorTextRus = null,
             ErrorTextEng = null,
             CreationTime = DateTime.UtcNow,
-            Direction = direction==DealDirection.Buy?1:-1,
+            Direction = quote.Direction==DealDirection.Buy?1:-1,
             IsValid = true,
             StandardPrice = null,
             ProductSpecificParams = null,
@@ -179,7 +190,7 @@ public class QuoteRepo( IDbConnection connection, IInstrumentRepo instrumentRepo
             SettlementPlace = "NSD",
             Xml = xml
         };
-        var quote = new BoardQuote()
+        var boardQuote = new BoardQuote()
         {
             Id = UTI.New("QT").ToString(),
             CreatedById = 1562,
@@ -194,7 +205,7 @@ public class QuoteRepo( IDbConnection connection, IInstrumentRepo instrumentRepo
             LockTime = null,
             CurrentRevision = revision,
         };
-        return quote;
+        return boardQuote;
     }
 
     public async Task<IEnumerable<string>> BulkInsertQuotesAsync(IEnumerable<BoardQuote> quotes, CancellationToken ct = default)
@@ -283,16 +294,18 @@ public class QuoteRepo( IDbConnection connection, IInstrumentRepo instrumentRepo
                    $"{(r.ProductSpecificParams == null ? "NULL" : $"N'{r.ProductSpecificParams.Replace("'", "''")}'")}, " +
                    $"{Convert.ToInt16(r.IsPartialExecution)}, {Convert.ToInt16(r.IsInformationQuote)})";
         }));
+       
         var revisionIds = (await connection.QueryAsync<int>(
             new CommandDefinition(revisionInsert, transaction: tran, cancellationToken: ct)
         )).ToList();
+        
 
         for (int i = 0; i < list.Count; i++)
         {
             list[i].CurrentRevision.Id = revisionIds[i];
             list[i].CurrentRevisionId = revisionIds[i];
         }
-
+        
 
         // 4️⃣ Обновление CurrentRevisionId в Quotes
         await connection.ExecuteAsync(@"

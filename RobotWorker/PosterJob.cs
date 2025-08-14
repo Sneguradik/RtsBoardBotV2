@@ -26,10 +26,6 @@ public class PosterJob(IQuotesStorage quotesStorage, IQuoteRepo quoteRepo, IOrde
                 logger.LogWarning($"OrderBook for {ticker} was not found.");
                 continue;
             }
-            
-            logger.LogInformation($"Processing {ticker}.");
-
-
 
             var sellExistingQuotes = quotesStorage.GetQuotesByTickerAndSide(ticker, DealDirection.Sell).ToList();
 
@@ -88,8 +84,19 @@ public class PosterJob(IQuotesStorage quotesStorage, IQuoteRepo quoteRepo, IOrde
             processorCounter++;
         }
         
-        await quoteRepo.UpdateQuotesAsync(quotesToUpdate,context.CancellationToken);
-        quotesStorage.AddAsync(await quoteRepo.CreateQuotesAsync(quotesToCreate,context.CancellationToken));
+        logger.LogInformation($"To update : {string.Join(", ", quotesToUpdate.Select(x=>x.Instrument.Ticker).ToHashSet())}");
+
+        if (quotesToUpdate.Any())
+        {
+            await quoteRepo.UpdateQuotesAsync(quotesToUpdate,context.CancellationToken);
+        }
+        
+        logger.LogInformation($"To create : {string.Join(", ", quotesToCreate.Select(x=>x.Instrument.Ticker).ToHashSet())}");
+
+        if (quotesToCreate.Any())
+        {
+            quotesStorage.AddAsync(await quoteRepo.CreateQuotesAsync(quotesToCreate,context.CancellationToken));
+        }
         
         logger.LogInformation($"{DateTime.Now:dd-MM-yy hh:mm:ss} - Processed {processorCounter} ticker.");
     }
